@@ -74,3 +74,38 @@ class PlanarTransform(distributions.Transform):
     def log_abs_det_jacobian(self, x: th.Tensor, _) -> th.Tensor:
         activation_grad = self.activation_grad(self._linear(x)) * self.weight
         return th.log((1 + activation_grad @ self.scale).abs())  # TODO: numerical stability.
+
+
+class AutoregressiveTransform(th.distributions.Transform):
+    r"""
+    Autoregressive transformation.
+
+    .. warning::
+
+        The conditioner :math:`c_i(u)` that parameterizes the transformation of :math:`u_i` to
+        :math:`x_i` must satisfy be strictly triangular, i.e.
+        :math:`\frac{\partial c_i}{\partial x_j} = 0` for :math:`j\geq i` or :math:`j\leq i`. If
+        this condition is not satisfied, the :meth:`log_abs_det_jacobian` will not be correct.
+
+    Args:
+        transform_cls: Callable that accepts keyword arguments from the :attr:`conditioner` and
+            returns a transformation.
+        conditioner: Callable that accepts a tensor to be transformed and returns parameters for the
+            :attr:`transform_cls` as a dictionary of keyword arguments.
+    """
+    bijective = False
+
+    def __init__(self, transform_cls: typing.Type[th.distributions.Transform],
+                 conditioner: typing.Callable[[th.Tensor], dict], cache_size: int = 0):
+        self.transform_cls = transform_cls
+        self.conditioner = conditioner
+        super().__init__(cache_size)
+
+    def _call(self, x):
+        transform = self.transform_cls(**self.conditioner(x))
+        return transform(x)
+
+    def log_abs_det_jacobian(self, x, y):
+        transform = self.transform_cls(**self.conditioner(x))
+        log_abs_det_jacobian_diag = transform.log_abs_det_jacobian(x, y)
+        return log_abs_det_jacobian_diag.sum(axis=-1)

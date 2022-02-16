@@ -13,12 +13,23 @@ def batch_shape(request) -> tuple:
     return request.param
 
 
-@pytest.fixture(params=[transforms.PermutationTransform, transforms.PlanarTransform])
+@pytest.fixture(params=[
+    transforms.AutoregressiveTransform,
+    transforms.PermutationTransform,
+    transforms.PlanarTransform,
+])
 def transform(request) -> th.distributions.Transform:
-    if request.param is transforms.PermutationTransform:
+    if request.param is transforms.AutoregressiveTransform:
+        def _conditioner(x: th.Tensor) -> dict:
+            return {
+                'loc': x @ th.randn(DIMS, DIMS).triu(1),
+                'scale': x @ th.randn(DIMS, DIMS).triu(1),
+            }
+        return transforms.AutoregressiveTransform(th.distributions.AffineTransform, _conditioner)
+    elif request.param is transforms.PermutationTransform:
         index = th.randperm(DIMS)
         return transforms.PermutationTransform(index)
-    if request.param is transforms.PlanarTransform:
+    elif request.param is transforms.PlanarTransform:
         bias = th.randn(())
         weight = th.randn(DIMS)
         scale = th.randn(DIMS)
@@ -30,7 +41,9 @@ def transform(request) -> th.distributions.Transform:
 @pytest.fixture
 def domain_tensor(transform: th.distributions.Transform, batch_shape: tuple) -> th.Tensor:
     x = th.randn(*batch_shape, DIMS)
-    return th.distributions.transform_to(transform.domain)(x)
+    if (domain := getattr(transform, 'domain', None)):
+        x = th.distributions.transform_to(domain)(x)
+    return x
 
 
 @pytest.fixture
@@ -71,3 +84,10 @@ def test_bijective_transform(transform: th.distributions.Transform, domain_tenso
 
 def test_dimension_preserving_transform(domain_tensor: th.Tensor, codomain_tensor: th.Tensor):
     assert domain_tensor.shape == codomain_tensor.shape
+
+
+def test_tri_jacobian(transform: th.distributions.Transform, jacobian: th.Tensor):
+    if not isinstance(transform, (transforms.AutoregressiveTransform)):
+        pytest.skip(f"{transform} is not required to have triangular Jacobian")
+    assert jacobian.allclose(jacobian.triu()) or jacobian.allclose(jacobian.tril()), \
+        "Jacobian is not triangular"
