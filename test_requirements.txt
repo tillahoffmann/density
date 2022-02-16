@@ -34,6 +34,8 @@ markupsafe==2.0.1
     # via jinja2
 mccabe==0.6.1
     # via flake8
+numpy==1.22.2
+    # via density
 packaging==21.0
     # via
     #   pytest

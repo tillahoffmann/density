@@ -11,6 +11,7 @@ setup(
     extras_require={
         'tests': [
             'flake8',
+            'numpy',
             'pytest',
             'pytest-cov',
         ],
