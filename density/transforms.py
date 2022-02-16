@@ -74,8 +74,3 @@ class PlanarTransform(distributions.Transform):
     def log_abs_det_jacobian(self, x: th.Tensor, _) -> th.Tensor:
         activation_grad = self.activation_grad(self._linear(x)) * self.weight
         return th.log((1 + activation_grad @ self.scale).abs())  # TODO: numerical stability.
-
-
-class FlowModule(th.nn.Module):
-    def forward(self, *args, **kwargs) -> th.distributions.transforms.Transform:
-        raise NotImplementedError
